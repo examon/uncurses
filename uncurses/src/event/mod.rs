@@ -152,7 +152,7 @@ impl std::fmt::Display for ColorScheme {
 /// [`Visible`](Visibility::Visible) only means it *may* be observable.
 ///
 /// Only `1` and `2` decode to a report; any other value is left as
-/// [`Event::Unknown`]. Treat a terminal that
+/// [`Event::UnknownCsi`]. Treat a terminal that
 /// reports nothing, or reports something unrecognized, as visible.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Visibility {
