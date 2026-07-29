@@ -144,6 +144,47 @@ impl std::fmt::Display for ColorScheme {
     }
 }
 
+/// Reported terminal visibility (DEC mode 2033).
+///
+/// This is an advisory, deliberately conservative hint used to skip expensive
+/// rendering that nobody can see. [`Hidden`](Visibility::Hidden) is precise:
+/// the terminal has positive knowledge that the view is not observable.
+/// [`Visible`](Visibility::Visible) only means it *may* be observable.
+///
+/// Only `1` and `2` decode to a report; any other value is left as
+/// [`Event::Unknown`]. Treat a terminal that
+/// reports nothing, or reports something unrecognized, as visible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Visibility {
+    /// Potentially visible (`CSI ? 999 ; 1 n`). The view may be observable.
+    ///
+    /// This does not promise that any cell is onscreen: the terminal reports
+    /// it whenever visibility is unknown or any view may be observed.
+    Visible,
+    /// Not visible (`CSI ? 999 ; 2 n`). The terminal knows the view is not
+    /// ordinarily observable, so expensive visual updates can be paused.
+    ///
+    /// Never assume this lasts for any minimum duration.
+    Hidden,
+}
+
+impl Visibility {
+    /// Whether the terminal view may be observable, so visual work is worth
+    /// doing. `true` for [`Visible`](Visibility::Visible).
+    pub fn is_visible(self) -> bool {
+        matches!(self, Visibility::Visible)
+    }
+}
+
+impl std::fmt::Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Visibility::Visible => "visible",
+            Visibility::Hidden => "hidden",
+        })
+    }
+}
+
 /// A terminal event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
@@ -283,6 +324,15 @@ pub enum Event {
     /// dark or light scheme. Indicates only the dark/light preference, not
     /// the actual colors.
     ColorScheme(ColorScheme),
+    /// Terminal visibility report (DEC mode 2033): whether the terminal view
+    /// may be observed. Arrives unsolicited while
+    /// [`Screen::enable_visibility_reports`](crate::screen::Screen::enable_visibility_reports)
+    /// is active, and as the reply to
+    /// [`Screen::request_visibility`](crate::screen::Screen::request_visibility).
+    ///
+    /// This is independent of focus: focus says which view receives keyboard
+    /// input, visibility says whether output can be seen.
+    Visibility(Visibility),
 
     // -- Clipboard / graphics ------------------------------------------------
     /// OSC 52 clipboard content reply.

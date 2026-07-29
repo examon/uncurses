@@ -3,19 +3,23 @@
 //! ## Category
 //!
 //! This module emits DSR requests and report responses: cursor position, extended
-//! cursor position, and light/dark preference reporting.
+//! cursor position, light/dark preference, and terminal visibility reporting.
 //!
 //! ## CSI conventions
 //!
 //! ANSI DSR uses `ESC [ Ps n`; DEC-private DSR inserts `?`. Cursor reports use
-//! final byte `R`, while light/dark reports use private DSR numbers.
+//! final byte `R`, while light/dark and visibility reports use private DSR
+//! numbers.
 //!
 //! ## Mode interaction
 //!
 //! The light/dark notification request is related to
 //! [`Mode::LIGHT_DARK`](crate::ansi::mode::Mode::LIGHT_DARK), DEC private mode
-//! 2031. Cursor-position reports are independent of modes but may be interpreted
-//! relative to terminal origin behavior.
+//! 2031, and the visibility request to
+//! [`Mode::VISIBILITY_REPORTS`](crate::ansi::mode::Mode::VISIBILITY_REPORTS),
+//! DEC private mode 2033. Both queries report once without changing their
+//! mode. Cursor-position reports are independent of modes but may be
+//! interpreted relative to terminal origin behavior.
 
 use std::io::{self, Write};
 
@@ -32,6 +36,12 @@ pub const REQUEST_EXTENDED_CURSOR_POSITION: &[u8] = b"\x1b[?6n";
 /// Request light/dark preference report: exact bytes `ESC [ ? 996 n` (`b"\x1b[?996n"`).
 pub const REQUEST_LIGHT_DARK_REPORT: &[u8] = b"\x1b[?996n";
 
+/// Request a terminal visibility report: exact bytes `ESC [ ? 998 n` (`b"\x1b[?998n"`).
+///
+/// The terminal replies with `ESC [ ? 999 ; Ps n`. This query does not change
+/// [`Mode::VISIBILITY_REPORTS`](crate::ansi::mode::Mode::VISIBILITY_REPORTS).
+pub const REQUEST_VISIBILITY_REPORT: &[u8] = b"\x1b[?998n";
+
 /// Write [`REQUEST_CURSOR_POSITION`], the standard DSR 6 cursor-position request.
 pub fn write_request_cursor_position<W: Write>(w: &mut W) -> io::Result<()> {
     w.write_all(REQUEST_CURSOR_POSITION)
@@ -45,6 +55,11 @@ pub fn write_request_extended_cursor_position<W: Write>(w: &mut W) -> io::Result
 /// Write [`REQUEST_LIGHT_DARK_REPORT`], the light/dark preference query.
 pub fn write_request_light_dark_report<W: Write>(w: &mut W) -> io::Result<()> {
     w.write_all(REQUEST_LIGHT_DARK_REPORT)
+}
+
+/// Write [`REQUEST_VISIBILITY_REPORT`], the one-shot terminal visibility query.
+pub fn write_request_visibility_report<W: Write>(w: &mut W) -> io::Result<()> {
+    w.write_all(REQUEST_VISIBILITY_REPORT)
 }
 
 /// Encode a Device Status Report request.
@@ -88,6 +103,18 @@ pub fn write_light_dark_report<W: Write>(w: &mut W, dark: bool) -> io::Result<()
         w.write_all(b"\x1b[?997;1n")
     } else {
         w.write_all(b"\x1b[?997;2n")
+    }
+}
+
+/// Encode a terminal visibility report response.
+///
+/// `visible == true` emits `ESC [ ? 999 ; 1 n` (potentially visible); `false`
+/// emits `ESC [ ? 999 ; 2 n` (not visible).
+pub fn write_visibility_report<W: Write>(w: &mut W, visible: bool) -> io::Result<()> {
+    if visible {
+        w.write_all(b"\x1b[?999;1n")
+    } else {
+        w.write_all(b"\x1b[?999;2n")
     }
 }
 
