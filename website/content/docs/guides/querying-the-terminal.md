@@ -57,9 +57,10 @@ match ev {
 
 These cover the everyday questions: the foreground, background, cursor, and
 palette colors; the cell and window pixel size; the cursor position; the color
-scheme (dark or light); mode state; clipboard contents; and feature probes like
-kitty keyboard and modify-other-keys. For the complete set, scan the `request_*`
-methods on [`Screen`](/api/uncurses/screen/struct.Screen.html) in the API
+scheme (dark or light); terminal visibility; mode state; clipboard contents; and
+feature probes like kitty keyboard and modify-other-keys. For the complete set,
+scan the `request_*` methods on
+[`Screen`](/api/uncurses/screen/struct.Screen.html) in the API
 reference; each one documents the exact `Event` variant used for its reply.
 If you are using the async `event_stream()` API, use the same pattern: await an
 event, call `observe_event(&ev)?`, then handle it.
