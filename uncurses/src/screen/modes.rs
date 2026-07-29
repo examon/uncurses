@@ -215,6 +215,44 @@ impl<I: Input, O: Write> Screen<I, O> {
         self.flush()
     }
 
+    /// Enable terminal visibility reports (DEC private mode 2033) and flush.
+    ///
+    /// The terminal reports whether its view may be observed, so an
+    /// application can pause animations and other expensive drawing that
+    /// nobody can see. Reports arrive as [`Event::Visibility`], and the
+    /// terminal sends the current state immediately, so the first report
+    /// lands without waiting for a change.
+    ///
+    /// Visibility is independent of focus: an unfocused window may still be
+    /// visible, and a focused one may be occluded or on a background tab.
+    ///
+    /// Check [`capabilities`](Self::capabilities) first
+    /// ([`visibility_reports`](crate::screen::Capabilities::visibility_reports));
+    /// terminals without support simply never report, which the
+    /// [`Visible`](crate::event::Visibility::Visible) default already covers.
+    ///
+    /// A hidden report is only a hint. Keep processing input and updating
+    /// state, and draw the latest state when the view is visible again;
+    /// never assume it stays hidden for any minimum duration.
+    ///
+    /// The request is recorded for save/restore. For a single reading
+    /// without enabling change reports, use
+    /// [`request_visibility`](Self::request_visibility).
+    ///
+    /// [`Event::Visibility`]: crate::event::Event::Visibility
+    pub fn enable_visibility_reports(&mut self) -> io::Result<()> {
+        mode::Mode::VISIBILITY_REPORTS.set(&mut self.out_buf)?;
+        self.state.visibility_reports = true;
+        self.flush()
+    }
+
+    /// Disable terminal visibility reports (DEC private mode 2033) and flush.
+    pub fn disable_visibility_reports(&mut self) -> io::Result<()> {
+        mode::Mode::VISIBILITY_REPORTS.reset(&mut self.out_buf)?;
+        self.state.visibility_reports = false;
+        self.flush()
+    }
+
     /// Set both the window title and icon name (`OSC 0`) and flush.
     ///
     /// An empty `title` clears both overrides, restoring the terminal's
@@ -383,6 +421,9 @@ impl<I: Input, O: Write> Screen<I, O> {
         if self.state.in_band_resize {
             mode::Mode::IN_BAND_RESIZE.reset(&mut self.out_buf)?;
         }
+        if self.state.visibility_reports {
+            mode::Mode::VISIBILITY_REPORTS.reset(&mut self.out_buf)?;
+        }
         if self.state.modify_other_keys != crate::event::ModifyOtherKeysMode::Disabled {
             self.out_buf.write_all(xterm::RESET_MODIFY_OTHER_KEYS)?;
         }
@@ -511,6 +552,12 @@ impl<I: Input, O: Write> Screen<I, O> {
         }
         if self.state.in_band_resize {
             mode::Mode::IN_BAND_RESIZE.set(&mut self.out_buf)?;
+        }
+        // Re-setting 2033 makes the terminal report the current state at
+        // once, so the application learns the visibility it resumed into
+        // without having to ask.
+        if self.state.visibility_reports {
+            mode::Mode::VISIBILITY_REPORTS.set(&mut self.out_buf)?;
         }
         match self.state.modify_other_keys {
             crate::event::ModifyOtherKeysMode::Mode1 => {
@@ -669,6 +716,21 @@ impl<I: Input, O: Write> Screen<I, O> {
     pub fn request_color_scheme(&mut self) -> io::Result<()> {
         self.out_buf
             .write_all(crate::ansi::status::REQUEST_LIGHT_DARK_REPORT)?;
+        self.flush()
+    }
+
+    /// Request the current terminal visibility (`CSI ? 998 n`): whether the
+    /// terminal view may be observed. One-shot, and it does not change DEC
+    /// private mode 2033, so it reads the state without subscribing to
+    /// changes. To be told about every change instead, call
+    /// [`enable_visibility_reports`](Self::enable_visibility_reports).
+    ///
+    /// Reply: [`Event::Visibility`](crate::event::Event::Visibility).
+    /// Terminals without support never reply, so treat the view as
+    /// [`Visible`](crate::event::Visibility::Visible) until told otherwise.
+    pub fn request_visibility(&mut self) -> io::Result<()> {
+        self.out_buf
+            .write_all(crate::ansi::status::REQUEST_VISIBILITY_REPORT)?;
         self.flush()
     }
 

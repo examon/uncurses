@@ -304,6 +304,104 @@ fn reset_and_restore_round_trip_grapheme_clusters() {
 }
 
 #[test]
+fn visibility_reports_round_trip_through_reset_and_restore() {
+    let mut buf: Vec<u8> = Vec::new();
+    {
+        let mut screen = Screen::for_test(&mut buf, (20, 1));
+        screen.enable_visibility_reports().unwrap();
+
+        // reset: tracked state is preserved, teardown writes RM
+        screen.reset().unwrap();
+        // restore: re-emits SM, which makes the terminal report the
+        // current visibility again
+        screen.restore().unwrap();
+        screen.flush().unwrap();
+    }
+    let out = String::from_utf8_lossy(&buf);
+    assert!(
+        out.matches("\x1b[?2033h").count() >= 2,
+        "expected enable and restore: {out:?}"
+    );
+    assert!(out.contains("\x1b[?2033l"), "expected teardown: {out:?}");
+}
+
+#[test]
+fn disabled_visibility_reports_are_not_reset_or_restored() {
+    let mut setup: Vec<u8> = Vec::new();
+    let mut buf: Vec<u8> = Vec::new();
+    {
+        let mut screen = Screen::for_test(&mut setup, (20, 1));
+        screen.enable_visibility_reports().unwrap();
+        screen.disable_visibility_reports().unwrap();
+        let _ = std::mem::replace(screen.terminal.output_mut(), &mut buf);
+        screen.reset().unwrap();
+        screen.restore().unwrap();
+        screen.flush().unwrap();
+    }
+    assert!(
+        !String::from_utf8_lossy(&buf).contains("\x1b[?2033"),
+        "unexpected 2033 traffic: {:?}",
+        String::from_utf8_lossy(&buf)
+    );
+}
+
+#[test]
+fn request_visibility_is_a_one_shot_query() {
+    let mut screen = Screen::for_test(Vec::new(), (80, 24));
+    screen.request_visibility().unwrap();
+    let out = s(screen.writer());
+    assert_eq!(out, "\x1b[?998n");
+    // A query must not enable the mode, or it would subscribe to changes.
+    assert!(!out.contains("\x1b[?2033h"));
+}
+
+#[test]
+fn visibility_capability_is_recorded_from_an_available_mode_report() {
+    use crate::ansi::mode::{Mode, ModeSetting};
+    let mut screen = Screen::for_test(Vec::new(), (80, 24));
+    assert!(!screen.capabilities().visibility_reports);
+    screen
+        .observe_event(&Event::ModeReport {
+            mode: Mode::VISIBILITY_REPORTS,
+            setting: ModeSetting::Reset,
+        })
+        .unwrap();
+    assert!(screen.capabilities().visibility_reports);
+}
+
+#[test]
+fn visibility_capability_ignores_unsupported_mode_reports() {
+    use crate::ansi::mode::{Mode, ModeSetting};
+    // The spec calls a DECRPM Ps of 0 or 4 unsupported, which is exactly
+    // what is_available() rejects.
+    for setting in [ModeSetting::NotRecognized, ModeSetting::PermanentlyReset] {
+        let mut screen = Screen::for_test(Vec::new(), (80, 24));
+        screen
+            .observe_event(&Event::ModeReport {
+                mode: Mode::VISIBILITY_REPORTS,
+                setting,
+            })
+            .unwrap();
+        assert!(
+            !screen.capabilities().visibility_reports,
+            "{setting:?} must not count as support"
+        );
+    }
+}
+
+#[test]
+fn init_queries_probe_visibility_support() {
+    let mut screen = Screen::for_test(Vec::new(), (80, 24));
+    screen.send_init_queries().unwrap();
+    screen.flush().unwrap();
+    assert!(
+        s(screen.writer()).contains("\x1b[?2033$p"),
+        "init must DECRQM-probe mode 2033: {:?}",
+        s(screen.writer())
+    );
+}
+
+#[test]
 fn test_resize() {
     let mut screen = Screen::for_test(Vec::new(), (80, 24));
     screen.resize((100, 30));

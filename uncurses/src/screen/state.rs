@@ -33,6 +33,12 @@ pub(super) struct State {
     /// dark/light scheme. Reports the dark/light preference only, not the
     /// actual colors.
     pub color_scheme_updates: bool,
+    /// Terminal visibility reports (DEC 2033). When `true`, the terminal
+    /// sends a `CSI ? 999 ; Ps n` report whenever the view becomes
+    /// observable or hidden, surfaced as [`Event::Visibility`].
+    ///
+    /// [`Event::Visibility`]: crate::event::Event::Visibility
+    pub visibility_reports: bool,
     /// In-band resize notifications (DEC 2048). When `true`, the
     /// terminal sends a `CSI 48 ; … t` report whenever the surface
     /// changes size, surfaced as [`Event::Resize`].
@@ -110,6 +116,7 @@ impl Default for State {
             bracketed_paste: false,
             focus_events: false,
             color_scheme_updates: false,
+            visibility_reports: false,
             in_band_resize: false,
             window_title: None,
             icon_name: None,
@@ -147,6 +154,11 @@ pub struct Capabilities {
     pub grapheme_clusters: bool,
     /// In-band resize notifications (DEC private mode 2048).
     pub in_band_resize: bool,
+    /// Terminal visibility reports (DEC private mode 2033). A `Ps` of `0` or
+    /// `4` in the `DECRPM` reply means unsupported, which is exactly the
+    /// [`ModeSetting::is_available`](crate::ansi::mode::ModeSetting::is_available)
+    /// rule this is recorded under.
+    pub visibility_reports: bool,
     /// Normal mouse button tracking (DEC private mode 1000).
     pub mouse_normal: bool,
     /// Button-event mouse tracking (DEC private mode 1002).

@@ -1145,6 +1145,7 @@ where
                 }
                 // Recorded only; enabling is the app's choice.
                 Mode::IN_BAND_RESIZE => self.caps.in_band_resize = true,
+                Mode::VISIBILITY_REPORTS => self.caps.visibility_reports = true,
                 Mode::MOUSE_NORMAL => self.caps.mouse_normal = true,
                 Mode::MOUSE_BUTTON => self.caps.mouse_button = true,
                 Mode::MOUSE_ANY => self.caps.mouse_any = true,
@@ -1315,6 +1316,7 @@ where
                 Mode::SYNCHRONIZED_OUTPUT,
                 Mode::UNICODE_CORE,
                 Mode::IN_BAND_RESIZE,
+                Mode::VISIBILITY_REPORTS,
                 Mode::MOUSE_NORMAL,
                 Mode::MOUSE_BUTTON,
                 Mode::MOUSE_ANY,
